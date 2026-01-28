@@ -5,6 +5,10 @@
 
 ## Pre-install setup (do these on all machines):
 
+> Sorry in advance, there are lots of dependencies and installations before we actually get K8s up and running
+
+> All files that need to be downloaded should be available in this repository at https://github.com/PcMasterBuilder/AirGappedKubernetes/blob/main/InternetInstallation/files - as of January 2026
+
 `sudo visudo`
 
 Scroll down to `Defaults    secure_path = ` and add `:/usr/local/bin` at the end of the line
@@ -63,15 +67,19 @@ On worker node(s):
 ## Installing containerd (following [docs](https://github.com/containerd/containerd/blob/main/docs/getting-started.md))
 
 > **January 2026**
-> You can download the following files from 
+> You can download the following file from [here](https://github.com/PcMasterBuilder/AirGappedKubernetes/blob/main/InternetInstallation/files/containerd-2.2.1-linux-amd64.tar.gz)
+
 Download the `containerd-<VERSION>-<OS>-<ARCH>.tar.gz` archive from https://github.com/containerd/containerd/releases ,
 verify its sha256sum, and extract it under `/usr/local`:
 
 ```console
-tar Cxzvf /usr/local containerd-1.6.2-linux-amd64.tar.gz
+tar Cxzvf /usr/local containerd-2.2.1-linux-amd64.tar.gz
 ```
 
 ### containerd via systemd
+
+> **January 2026**
+> You can download the following file from [here](https://github.com/PcMasterBuilder/AirGappedKubernetes/blob/main/InternetInstallation/files/containerd.service)
 
 Download [containerd.service](https://raw.githubusercontent.com/containerd/containerd/main/containerd.service) and put it in `/usr/local/lib/systemd/system/containerd.service`
 
@@ -82,4 +90,29 @@ systemctl enable --now containerd
 ```
 
 ### Installing runc
+
+> **January 2026**
+> You can download the following file from [here](https://github.com/PcMasterBuilder/AirGappedKubernetes/blob/main/InternetInstallation/files/runc.amd64)
+
+Download the `runc.<ARCH>` binary from https://github.com/opencontainers/runc/releases , and install it as `/usr/local/sbin/runc`.
+
+```console
+install -m 755 runc.amd64 /usr/local/sbin/runc
+```
+
+### Installing CNI plugins
+
+> **January 2026**
+> You can download the following file from [here](https://github.com/PcMasterBuilder/AirGappedKubernetes/blob/main/InternetInstallation/files/cni-plugins-linux-amd64-v1.9.0.tgz)
+
+Download the `cni-plugins-<OS>-<ARCH>-<VERSION>.tgz` archive from https://github.com/containernetworking/plugins/releases , and extract it under `/opt/cni/bin`:
+
+```console
+mkdir -p /opt/cni/bin
+tar Cxzvf /opt/cni/bin cni-plugins-linux-amd64-v1.9.0.tgz
+```
+
+### Generate containerd config.toml
+
+The default configuration can be generated via `containerd config default > /etc/containerd/config.toml`
 
