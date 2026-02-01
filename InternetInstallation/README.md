@@ -58,11 +58,11 @@ ls /proc/sys/net/bridge/bridge-nf-call-iptables  # Verify (no error)
 
 On master node:
 
-```sudo firewall-cmd --permanent --add-port={6443/tcp,2379-2380/tcp,10250/tcp,10259/tcp,10257/tcp} && sudo firewall-cmd --reload```
+```sudo firewall-cmd --permanent --add-port={6443/tcp,2379-2380/tcp,10250/tcp,10259/tcp,10257/tcp,7946/tcp,7946/udp,9443/tcp,8472/udp} && sudo firewall-cmd --reload```
 
 On worker node(s):
 
-```sudo firewall-cmd --permanent --add-port={10250/tcp,10256/tcp,30000-32767/tcp,30000-32767/udp} && sudo firewall-cmd --reload```
+```sudo firewall-cmd --permanent --add-port={10250/tcp,10256/tcp,30000-32767/tcp,30000-32767/udp,7946/tcp,7946/udp,8472/udp} && sudo firewall-cmd --reload```
 
 ## Installing containerd (following [docs](https://github.com/containerd/containerd/blob/main/docs/getting-started.md))
 
@@ -280,3 +280,181 @@ firstrhel    Ready    control-plane   38m   v1.35.0
 secondrhel   Ready    <none>          28m   v1.35.0
 thirdrhel    Ready    <none>          21m   v1.35.0
 ```
+
+Congradulations! You now have a "fully working" cluster!
+However, if you want to access your programs externally you'll need to setup Ingress with a Load Balancer
+# Ingress + Load Balancer
+### Helm installation
+First [install helm](https://helm.sh/docs/intro/install/)
+Download your [desired version](https://github.com/helm/helm/releases)
+Unpack it 
+```console
+tar -zxvf helm-v4.0.0-linux-amd64.tar.gz
+sudo cp linux-amd64/helm /usr/local/bin/helm
+sudo chmod +x /usr/local/bin/helm
+```
+### MetalLB (following [docs](https://metallb.io/installation/))
+
+First, let's enable strict ARP mode. Edit the kube-proxy config with `kubectl edit configmap -n kube-system kube-proxy`, scroll down to `mode: ""` and set:
+```yaml
+mode: "ipvs"
+```
+A bit higher up you'll see `strictARP: false`. Change to true
+```yaml
+strictARP: true
+```
+#### Installation
+Apply the MetalLB manifest:
+```yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/config/manifests/metallb-native.yaml
+```
+You can make sure the metallb pods are up with 
+```console
+kubectl -n metallb-system get pod -w
+```
+Next we'll need to assign an ip pool for metallb to use
+#### Configuration
+Find what range of IPs is outside of the use range so you can give it to metallb. I will be using just `10.0.0.180`
+
+We will now create a yaml for both the IP pool and L2 Advertisement
+Create a `ip-l2.yaml`
+```console
+nano ip-l2.yaml
+```
+```yaml
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: first-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 10.0.0.180/32  # Single IP
+  - 10.0.0.190-10.0.0.199 # Or a range of IPs
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: first-pool
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - first-pool
+```
+Apply with 
+```console
+kubectl apply -f ip-l2.yaml
+```
+Aaaaaaaaaand here we reach our first bandage solution🥳
+If you run the mentioned command and it tells you something like
+```console
+Error from server (InternalError): error when creating "ip-l2.yml": Internal error occurred: failed calling webhook "ipaddresspoolvalidationwebhook.metallb.io": failed to call webhook: Post "https://metallb-webhook-service.metallb-system.svc:443/validate-metallb-io-v1beta1-ipaddresspool?timeout=10s": context deadline exceeded
+Error from server (InternalError): error when creating "ip-l2.yml": Internal error occurred: failed calling webhook "l2advertisementvalidationwebhook.metallb.io": failed to call webhook: Post "https://metallb-webhook-service.metallb-system.svc:443/validate-metallb-io-v1beta1-l2advertisement?timeout=10s": context deadline exceeded
+```
+Then just tell Kubernetes to stop checking the webhook
+```console
+kubectl delete validatingwebhookconfigurations metallb-webhook-configuration
+```
+Also, if you're still getting problems it may be related to the firewall, so if you can afford it:
+```console
+sudo systemctl stop firewalld   # On all machines
+```
+
+### NGINX Ingress (following [docs](https://docs.nginx.com/nginx-ingress-controller/install/helm/open-source/))
+
+#### Installation
+
+Go into a download directory and pull the helm chart
+```console
+helm pull oci://ghcr.io/nginx/charts/nginx-ingress --untar --version 2.4.2
+cd nginx-ingress
+helm install ingress .
+```
+Check if NGINX came up
+```console
+kubectl get ingressclasses
+kubectl get pods -A # Look for nginx
+kubectl get svc -A # Look for nginx
+```
+Specifically, next to the nginx controller svc, look to see if it got an `EXTERNAL-IP`. If it's `<pending> you may need to give it more IPs in the IP pool (remember that YAML from before?)
+
+#### Configuration
+Create an ingress resource yaml
+
+
+Quick comment about the host line (***):
+
+For testing purposes you can add a line to your /etc/hosts file `your-NGINX-LB-ip python.yourdomain.com` otherwise point your domain/subdomain to `your-NGINX-LB-ip`
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  name: ingress
+  # namespace: ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: python.yourdomain.com # ***
+    http:
+      paths:
+      - backend:
+          service:
+            name: python-http-service
+            port:
+              number: 11000
+        path: /
+        pathType: Exact
+```
+<details>
+<summary>test</summary>
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  name: ingress
+  # namespace: ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: python.yoursite.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: python-http-service
+            port:
+              number: 11000
+        path: /
+        pathType: Exact
+      # - backend:
+      #     service:
+      #       name: fundtransfer
+      #       port:
+      #         number: 80
+      #   path: /fundtransfer
+      #   pathType: Exact
+  # - host: domain.com
+  #   http:
+  #     paths:
+  #     - path: /
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: web-service
+  #           port:
+  #             number: 80
+```
+</details>
+
+
+
+
+
+
+Useful links:
+
+Ingress explanation - https://devopscube.com/kubernetes-ingress-tutorial/
