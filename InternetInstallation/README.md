@@ -408,7 +408,8 @@ spec:
         pathType: Exact
 ```
 <details>
-<summary>test</summary>
+<summary>For fuller yaml with more options</summary>
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -449,7 +450,7 @@ spec:
   #             number: 80
 ```
 </details>
-
+Make sure that all the places where it says `name` is the _service_ name you want to point to.
 
 
 
