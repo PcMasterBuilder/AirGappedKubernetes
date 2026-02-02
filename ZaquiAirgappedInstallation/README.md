@@ -182,11 +182,19 @@ docker tag NAME YOUR-REGISTRY:5000/NAME-WITHOUT-PREFIX
 docker push NEW-NAME-WITH-REGISTRY
 ```
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-apiserver:v1.30.14
+
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-apiserver:v1.30.14 --plain-http
+
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/coredns:v1.11.3 --plain-http
+
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/coredns/coredns:v1.11.3 --plain-http
+
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/etcd:3.5.15-0 --plain-http
+
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-controller-manager:v1.30.14 --plain-http
+
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-proxy:v1.30.14 --plain-http
+
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-scheduler:v1.30.14 --plain-http
+
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/pause:3.9 --plain-http
