@@ -158,11 +158,35 @@ Test
 kubectl version --client
 ```
 
-### Running kubeadm!!
+sudo nano /etc/containerd/config.toml
 
-Here is the stage where we see if all this guesswork was for naught
+change <IP> & <Port>
 
-On the master node:
 ```console
-sudo kubeadm init --config /path/to/your/kubelet-config.yaml
+[plugins.”io.containerd.grpc.v1.cri”.registry]
+  [plugins.”io.containerd.grpc.v1.cri”.registry.mirrors]
+    [plugins.”io.containerd.grpc.v1.cri”.registry.mirrors.”<IP>:<Port>”]
+      endpoint = [“http://<IP>:<Port>”]
+  [plugins.”io.containerd.grpc.v1.cri”.registry.configs]
+    [plugins.”io.containerd.grpc.v1.cri”.registry.configs.”<IP>:<Port>”.tls]
+      insecure_skip_verify = true
 ```
+[source](https://dnelaturi.medium.com/how-to-configure-private-registry-for-containerd-in-k8s-environment-3b55a2caf79b)
+
+Download tars in [folder](files/AirgapImages)
+
+For each run
+```console
+docker load -i TAR
+docker tag NAME YOUR-REGISTRY:5000/NAME-WITHOUT-PREFIX
+docker push NEW-NAME-WITH-REGISTRY
+```
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-apiserver:v1.30.14
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-apiserver:v1.30.14 --plain-http
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/coredns:v1.11.3 --plain-http
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/coredns/coredns:v1.11.3 --plain-http
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/etcd:3.5.15-0 --plain-http
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-controller-manager:v1.30.14 --plain-http
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-proxy:v1.30.14 --plain-http
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-scheduler:v1.30.14 --plain-http
+> sudo ctr -n k8s.io images pull 192.168.56.103:5000/pause:3.9 --plain-http
