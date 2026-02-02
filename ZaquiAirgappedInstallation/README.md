@@ -75,18 +75,94 @@ On worker node(s):
 
 
 ## Installing containerd 
-Bring the tgz from [here](containerd-1.7.18-linux-amd64.tar.gz) and install with 
+Bring the tgz from [here](files/containerd-1.7.18-linux-amd64.tar.gz) and install with 
 
 ```console
 sudo tar Cxzvf /usr/local containerd-1.7.18-linux-amd64.tar.gz
 ```
 
 ### systemd for containerd
-Download [containerd.service](files/containerd.service) and put it in `/usr/local/lib/systemd/system/containerd.service`
+Download [containerd.service](files/containerd.service) and put it in `/usr/local/lib/systemd/system/containerd.service`:
 
 ```console
 sudo mkdir -p /usr/local/lib/systemd/system/
 sudo cp containerd.service /usr/local/lib/systemd/system/containerd.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now containerd
+```
+### Generate containerd config.toml
+
+Generate the default configuration via:
+```
+sudo mkdir -p /etc/containerd
+sudo chmod 777 /etc/containerd
+containerd config default > /etc/containerd/config.toml
+```
+
+Edit config with `sudo nano /etc/containerd/config.toml`
+
+Look for `[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]` (or use ctrl+w)
+ and change `SystemdCgroup = false` to `true` 
+
+### Installing runc
+Download the [runc.amd64](files/runc.amd64), and install it as `/usr/local/sbin/runc`:
+
+
+```console
+sudo install -m 755 runc.amd64 /usr/local/sbin/runc
+```
+
+### Installing CNI plugins
+
+Download [cni-plugins-linux-amd64-v1.3.0.tgz](files/cni-plugins-linux-amd64-v1.3.0.tgz), and extract it under `/opt/cni/bin`:
+
+```console
+sudo mkdir -p /opt/cni/bin
+sudo tar Cxzvf /opt/cni/bin cni-plugins-linux-amd64-v1.3.0.tgz
+```
+## K8s Components (following [docs](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl))
+
+> For now ignoring crictl because I don't think we need it
+> Download [crictl-v1.28.0-linux-amd64.tar.gz](files/crictl-v1.28.0-linux-amd64.tar.gz)
+
+#### Install kubeadm, kubelet and add a kubelet systemd service:
+Download [kubeadm](files/kubeadm) and [kubelet](files/kubelet), perform:
+```console
+sudo chmod +x kubeadm kubelet
+sudo cp kubeadm kubelet /usr/local/bin
+```
+
+Download [10-kubeadm.conf](files/10-kubeadm.conf) and [kubelet.service](files/kubelet.service).
+
+Make sure you're in the directory where you placed the files, and run:
+
+```console
+sudo cp ./kubelet /usr/bin/kubelet
+sudo chmod +x /usr/bin/kubelet
+sudo cp kubelet.service /usr/lib/systemd/system/kubelet.service
+sudo sed -i 's|/usr/bin|/usr/bin|g' /usr/lib/systemd/system/kubelet.service
+sudo mkdir -p /usr/lib/systemd/system/kubelet.service.d
+sudo cp 10-kubeadm.conf /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+sudo sed -i 's|/usr/bin|/usr/bin|g' /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+sudo systemctl enable --now kubelet
+```
+
+### Installing kubectl
+Download [kubectl binary](files/kubectl) and install:
+
+```console
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+```
+Test
+```console
+kubectl version --client
+```
+
+### Running kubeadm!!
+
+Here is the stage where we see if all this guesswork was for naught
+
+On the master node:
+```console
+sudo kubeadm init --config /path/to/your/kubelet-config.yaml
 ```

@@ -152,7 +152,7 @@ CRICTL_VERSION="v1.35.0"
 ARCH="amd64"
 curl -L "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-${ARCH}.tar.gz" | sudo tar -C $DOWNLOAD_DIR -xz
 ```
-Install kubeadm, kubelet and add a kubelet systemd service:
+#### Install kubeadm, kubelet and add a kubelet systemd service:
 ```console
 RELEASE="$(curl -sSL https://dl.k8s.io/release/stable.txt)"
 ARCH="amd64"
