@@ -1,4 +1,4 @@
-# Air Gapped Kubernetes (K8s) Installation
+# Kubernetes (K8s) Installation
 #### I'm assuming an ideal environment of latest linux, internet connection
  -  At least two machines (one master and one worker)
  - Each has their own ip and can communicate with each other (test by SSHing to eachother)
