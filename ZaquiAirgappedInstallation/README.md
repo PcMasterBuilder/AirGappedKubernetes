@@ -75,4 +75,18 @@ On worker node(s):
 
 
 ## Installing containerd 
+Bring the tgz from [here](containerd-1.7.18-linux-amd64.tar.gz) and install with 
 
+```console
+sudo tar Cxzvf /usr/local containerd-1.7.18-linux-amd64.tar.gz
+```
+
+### systemd for containerd
+Download [containerd.service](files/containerd.service) and put it in `/usr/local/lib/systemd/system/containerd.service`
+
+```console
+sudo mkdir -p /usr/local/lib/systemd/system/
+sudo cp containerd.service /usr/local/lib/systemd/system/containerd.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now containerd
+```
