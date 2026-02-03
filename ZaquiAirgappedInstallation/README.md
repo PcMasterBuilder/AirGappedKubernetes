@@ -2,6 +2,7 @@
 #### I will be doing this all on RHEL 8.5
  -  At least two machines (one master and one worker)
  - Each has their own ip and can communicate with each other (test by SSHing to eachother)
+ -  A docker registry (sryy they're not too crazy to set up)
 
 ## Pre-install setup (do these on all machines):
 
@@ -20,10 +21,10 @@ Create a kubelet-config.yaml, doesn’t matter where we place it, because we're 
 
 ```yaml
 ---
-apiVersion: kubeadm.k8s.io/v1beta4
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 localAPIEndpoint:
-  advertiseAddress: "Your-Master-IP"  # Insert your Master Node IP
+  advertiseAddress: "192.168.56.101"  # Master Node IP
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
@@ -32,11 +33,15 @@ failSwapOn: false
 memorySwap:
   swapBehavior: NoSwap
 ---
-apiVersion: kubeadm.k8s.io/v1beta4
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
-kubernetesVersion: stable
+kubernetesVersion: v1.30.14
+imageRepository: "192.168.56.103:5000"  # Registry IP
+dns:
+  imageRepository: "192.168.56.103:5000/coredns"
 networking:
   podSubnet: "10.200.0.0/16"
+
 ```
 
 ### A few networking stuff and we'll get started:
@@ -122,8 +127,12 @@ sudo tar Cxzvf /opt/cni/bin cni-plugins-linux-amd64-v1.3.0.tgz
 ```
 ## K8s Components (following [docs](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl))
 
-> For now ignoring crictl because I don't think we need it
-> Download [crictl-v1.28.0-linux-amd64.tar.gz](files/crictl-v1.28.0-linux-amd64.tar.gz)
+
+Download [crictl-v1.28.0-linux-amd64.tar.gz](files/crictl-v1.28.0-linux-amd64.tar.gz)
+
+```console
+sudo tar -C /usr/local/bin -xzf crictl-v1.28.0-linux-amd64.tar.gz
+```
 
 #### Install kubeadm, kubelet and add a kubelet systemd service:
 Download [kubeadm](files/kubeadm) and [kubelet](files/kubelet), perform:
@@ -163,14 +172,20 @@ sudo nano /etc/containerd/config.toml
 change <IP> & <Port>
 
 ```console
-[plugins.”io.containerd.grpc.v1.cri”.registry]
-  [plugins.”io.containerd.grpc.v1.cri”.registry.mirrors]
-    [plugins.”io.containerd.grpc.v1.cri”.registry.mirrors.”<IP>:<Port>”]
-      endpoint = [“http://<IP>:<Port>”]
-  [plugins.”io.containerd.grpc.v1.cri”.registry.configs]
-    [plugins.”io.containerd.grpc.v1.cri”.registry.configs.”<IP>:<Port>”.tls]
+[plugins."io.containerd.grpc.v1.cri".registry]
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."<IP>:<Port>"]
+      endpoint = ["http://<IP>:<Port>"]
+  [plugins."io.containerd.grpc.v1.cri".registry.configs]
+    [plugins."io.containerd.grpc.v1.cri".registry.configs."<IP>:<Port>".tls]
       insecure_skip_verify = true
 ```
+Also look for `sandbox_image =` and change to your registry. (and make sure the tag version at the end is 3.9, not 3.8)
+
+#### Crucial after changes:
+
+Run `sudo systemctl restart containerd`
+
 [source](https://dnelaturi.medium.com/how-to-configure-private-registry-for-containerd-in-k8s-environment-3b55a2caf79b)
 
 Download tars in [folder](files/AirgapImages)
@@ -181,8 +196,6 @@ docker load -i TAR
 docker tag NAME YOUR-REGISTRY:5000/NAME-WITHOUT-PREFIX
 docker push NEW-NAME-WITH-REGISTRY
 ```
-> sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-apiserver:v1.30.14
-
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-apiserver:v1.30.14 --plain-http
 
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/coredns:v1.11.3 --plain-http
@@ -198,3 +211,94 @@ docker push NEW-NAME-WITH-REGISTRY
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/kube-scheduler:v1.30.14 --plain-http
 
 > sudo ctr -n k8s.io images pull 192.168.56.103:5000/pause:3.9 --plain-http
+
+
+You may need to install some dependencies from [here](files/conntrack-offline) 
+
+Go into that folder once downloaded and 
+```console
+sudo rpm -Uvh ./*.rpm
+ ```
+
+Ok I'll need to go over this and make it more legible, but run
+
+```console 
+sudo kubeadm init --config /path/to/your/kubelet-config.yaml
+```
+and then run the commands it gives you (if it works first try)
+```
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
+
+Then make sure to save the join command it gives you
+
+Add `sudo` and run on each of your worker nodes
+
+If all went well, you can run `kubectl get nodes` and see your nodes. Currently their state will be `NotReady`, don't worry! This is ok. We need to install a CNI for them to be ready. We will use flannel
+
+### Installing Flannel 
+
+Let's download the [kube-flannel.yml](files/kube-flannel.yml) to our downloads folder 
+
+Also download the two flannel images we need to run this yml: [flannel.tar](files/flannel.tar), [flannel-cni.tar](files/flannel-cni.tar)
+
+Load them into the registry with
+```console
+docker load -i flannel.tar
+docker load -i flannel-cni.tar
+docker tag flannel/flannel:v0.24.3 
+docker tag flannel/flannel-cni-plugin:v1.4.0-flannel1 192.168.56.103:5000/flannel-cni-plugin:v1.4.0-flannel1
+REGISTRYIP:5000/flannel:v0.24.3
+docker push REGISTRYIP:5000/flannel:v0.24.3
+docker push REGISTRYIP:5000/flannel-cni-plugin:v1.4.0-flannel1
+```
+
+#### Now we're gonna make some tweaks to your kube-flannel.yml
+First, go through the kube-flannel.yml you downloaded, search for `image`, and replace every instance with your updated image with your registry prefix.
+
+> E.G. `image: docker.io/flannel/flannel:v0.24.3` now becomes `image: 192.168.56.103:5000/flannel:v0.24.3`
+
+Run `ip a` and take note of your main interface name (mine is enp0s3 but it might be eth0 or something else)
+
+`nano kube-flannel.yml` to edit the CIDR range for flannel
+
+Make sure `"Network"` value is 10.200.0.0/16 (or change if needed)
+```yaml
+ net-conf.json: |
+    {
+      "Network": "10.200.0.0/16",
+      "EnableNFTables": false,
+      "Backend": {
+        "Type": "vxlan"
+      }
+    }
+```
+Look for this part-
+```yaml
+ containers:
+      - args:
+        - --ip-masq
+        - --kube-subnet-mgr
+```
+and add
+```yaml
+        - --iface=your-network-interface
+```
+Once done editing, apply the Flannel CNI YAML:
+```console
+kubectl apply -f kube-flannel.yml
+```
+
+
+
+
+
+
+
+[Flannel error when first applying yaml, if there's no ip route defined](https://gemini.google.com/share/755464fd7d81) - bandage solution but still
+```
+sudo ip route add 10.96.0.0/12 dev enp0s3
+```
+

@@ -146,7 +146,7 @@ Define the directory to download command files:
 DOWNLOAD_DIR="/usr/local/bin"
 sudo mkdir -p "$DOWNLOAD_DIR"
 ```
-Optionally install crictl (required for interaction with the Container Runtime Interface (CRI), optional for kubeadm):
+Install crictl (required for interaction with the Container Runtime Interface (CRI), optional for kubeadm):
 ```console
 CRICTL_VERSION="v1.35.0"
 ARCH="amd64"
@@ -217,7 +217,7 @@ If all went well, you can run `kubectl get nodes` and see your nodes. Currently 
 ### Installing Flannel (following [this](https://medium.com/@chandnamanan2004/part-3-initializing-the-control-plane-node-for-your-kubernetes-cluster-3fd3a04f8858#:~:text=Step%203%3A%20Install%20a%20CNI%20(Container%20Network%20Interface)))
 
 From now on we'll only need to run the commands on our master (or where we installed kubectl)
-Let's download the kube-flannel.yaml to our downloads folder 
+Let's download the kube-flannel.yml to our downloads folder 
 ```console
 wget https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 ```
