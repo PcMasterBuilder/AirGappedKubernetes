@@ -292,13 +292,77 @@ kubectl apply -f kube-flannel.yml
 ```
 
 
-
-
-
-
-
 [Flannel error when first applying yaml, if there's no ip route defined](https://gemini.google.com/share/755464fd7d81) - bandage solution but still
 ```
 sudo ip route add 10.96.0.0/12 dev enp0s3
 ```
 
+Check if Flannel is running:
+```console
+kubectl get pods -A
+```
+And if you wait long enough (about a minute) all of your containers should come up
+
+<details>
+<summary>If you run `kubectl get nodes -o wide and there's no Internal IP</summary>
+
+ - On Rhel1 (Master): Edit the Kubelet config file (usually `/var/lib/kubelet/kubeadm-flags.env` or /etc/sysconfig/kubelet):
+ ```
+ sudo vi /var/lib/kubelet/kubeadm-flags.env
+ ```
+ Add --node-ip=192.168.56.101 to the KUBELET_KUBEADM_ARGS string. It should look something like: KUBELET_KUBEADM_ARGS="--container-runtime-endpoint=unix:///run/containerd/containerd.sock --node-ip=192.168.56.101"
+
+ - On Rhel2 (Worker): Do the same, but use its IP:
+ ```
+ sudo vi /var/lib/kubelet/kubeadm-flags.env
+ ```
+ Add --node-ip=192.168.56.102 to the args.\
+
+ - Restart Kubelet on both nodes:
+ ```
+ sudo systemctl restart kubelet
+ ```
+
+</details>
+
+(`kubectl get all -A` or `kubectl get nodes -o wide`)
+
+Congradulations! You now have a "fully working" cluster!
+However, if you want to access your programs externally you'll need to setup Ingress with a Load Balancer
+# Ingress + Load Balancer
+### Helm installation
+
+Download [Helm](files/helm-v4.1.0-linux-amd64.tar.gz)
+
+Unpack it
+```console
+tar -zxvf helm-v4.1.0-linux-amd64.tar.gz
+sudo cp linux-amd64/helm /usr/local/bin/helm
+sudo chmod +x /usr/local/bin/helm
+```
+
+### MetalLB (following [docs](https://metallb.io/installation/))
+
+First, let's enable strict ARP mode. Edit the kube-proxy config with `kubectl edit configmap -n kube-system kube-proxy`, scroll down to `mode: ""` and set:
+```yaml
+mode: "ipvs"
+```
+A bit higher up you'll see `strictARP: false`. Change to true
+```yaml
+strictARP: true
+```
+
+#### Installation
+
+Download [metallb-controller](files/metallb-controller.tar) and [metallb-speaker](files/metallb-speaker.tar)
+
+Load, tag and push:
+```console
+docker load -i metallb-controller.tar
+docker load -i metallb-speaker.tar
+docker tag quay.io/metallb/controller:v0.15.3 192.168.56.103:5000/controller:v0.15.3
+docker push 192.168.56.103:5000/controller:v0.15.3
+docker tag quay.io/metallb/speaker:v0.15.3 192.168.56.103:5000/speaker:v0.15.3
+docker push 192.168.56.103:5000/speaker:v0.15.3
+```
+Edit the metallb yaml
